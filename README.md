@@ -1,6 +1,4 @@
-﻿Absolutely! Here's a summary crafted for your GitHub README, along with installation instructions and other key notes.
-
-**README Summary: Conversational AI Assistant with Streamlit**
+﻿**README Summary: Conversational AI Assistant with Streamlit**
 
 **About**
 
