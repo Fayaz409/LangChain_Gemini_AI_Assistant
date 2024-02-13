@@ -1,4 +1,4 @@
-﻿## onversational AI Assistant with Streamlit
+﻿## Conversational AI Assistant with Streamlit
 
 **About**
 
