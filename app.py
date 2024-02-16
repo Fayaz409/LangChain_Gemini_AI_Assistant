@@ -24,6 +24,19 @@ def load_css(css_file):
         st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
 load_css("styles.css")  # Load your CSS file
+def extract_unique_prompts(conversation_history):
+    all_prompts = [message['Prompt'] for message in conversation_history]
+    print(all_prompts)
+    return list(set(all_prompts))  # Using a set removes duplicates
+
+def update_and_get_unique_prompts(new_prompt=None):
+    conversation_history = load_conversation()
+    if new_prompt and new_prompt not in conversation_history:
+        # Here you might want to append the new prompt to your conversation history or a separate prompt storage
+        save_conversation({'Prompt': new_prompt, 'User': '', 'Model': ''})  # Adjust based on your save_conversation function
+    unique_prompts = extract_unique_prompts(conversation_history)
+    return unique_prompts
+
 
 memory = ConversationSummaryBufferMemory(llm=llm)
 human_avatar='https://th.bing.com/th/id/R.f307bf56791ab698472f57441c1f14fb?rik=kfAyyfpbDg92hQ&pid=ImgRaw&r=0'
@@ -34,24 +47,27 @@ st.header('Make Your Assistant')
 # Sidebar: Prompt Template 
 st.sidebar.header("Prompt Template")
 prompt_template = st.sidebar.text_area('Enter your prompt template here:')
-apply_button = st.sidebar.button("Apply Template") 
+apply_button = st.sidebar.button("Apply Template")
+st.sidebar.header("Prompt Selection")
 
 # Main Chat Area
+# Main conversation area
 st.header("Conversation")
-user_input = st.text_input('Enter your prompt:')
-send_button = st.button("Send") 
-chat_history = [{"User": "", "Model": ""}]  # Initial placeholder 
-template_chain = None
+user_input = st.text_input('Enter your prompt:', key='user_input')
+send_button = st.button("Send")
 
-def prompt(prompt_template: str, user_input:str=None):
+
+def prompt(prompt_template: str, user_input: str = None):
     # Your updated and excellent prompt function
-    if user_input is None:
-        user_input=''
     formatted_prompt = f'''
     # Instructions:\n {prompt_template}\n
-    # Query: {user_input}
-    ''' 
-    return PromptTemplate(template=formatted_prompt, input_variables=[user_input]) 
+     # Query: {user_input}
+      
+
+    
+        '''
+
+    return PromptTemplate(template=formatted_prompt, input_variables=[user_input])
 
 general_chain = LLMChain(
     llm=llm, 
@@ -60,49 +76,62 @@ general_chain = LLMChain(
     verbose=True
 )
 
-# def llm_chain():  
-#     memory = ConversationSummaryBufferMemory(llm=llm)
-#     chain = ConversationChain(llm=llm, prompt=prompt(prompt_template), memory=memory, verbose=True)
-#     return chain
+
+
+template_chain = None  # Initialize template_chain outside the loop
+if apply_button and prompt_template:
+    all_prompts = update_and_get_unique_prompts(new_prompt=prompt_template)
+
+# st.sidebar.header("Prompt Selection")
+all_prompts = update_and_get_unique_prompts()  # Update prompts from storage
+selected_prompt = st.sidebar.selectbox("Choose a Prompt", options=all_prompts, key='selected_prompt')
 
 
 current_history=[]
 def handle_input():
+
     global template_chain
     global current_history
+    # applied_prompt = ""
+    current_prompt = selected_prompt if selected_prompt else prompt_template
 
-    if send_button or apply_button:
-        if not prompt_template and send_button:  # User wants general chat
-            output = general_chain.run({'input': user_input})
+    if send_button and user_input:
 
-            # st.write(output)
-        elif prompt_template:  # Template case
-            if template_chain is None: 
-                template_chain = LLMChain(llm=llm,memory=memory, prompt=prompt(prompt_template,user_input=user_input), verbose=True)
-            output = template_chain.run({ 'input': user_input})
-
-        # Update Chat History 
-        save_conversation([{'User':user_input,'Model':output}])
-        
-       # Load existing history and display
+      # Use the current prompt for model invocation
+        model_chain = LLMChain(
+        llm=llm, 
+        prompt=prompt(current_prompt, user_input), 
+        memory=memory, 
+        verbose=True
+        )
+        output = model_chain.invoke({'input': user_input})
+        # Save the information to database
+        save_conversation({'Prompt': current_prompt, 'User': user_input, 'Model': output.get('text', '')})
+        # Reload conversation history to display the latest interaction
         current_history = load_conversation()
-        print(current_history)
-        
-        
-        # Display Chat History
-    for message in current_history:
-            if message["User"] and message["Model"]: 
-                # Display user message with avatar
-                st.markdown(
-                    f"<div class='user-message'><img src='{human_avatar}' class='avatar'>{message['User']}</div>",
-                    unsafe_allow_html=True
-                )
-                # Display model message with robot avatar
-                st.markdown(
-                    f"<div class='model-message'><img src='{ai_avatar}' class='avatar'>{message['Model']}</div>",
-                    unsafe_allow_html=True
-                )
 
+        
+        # Load existing history and display
+        current_history = load_conversation()
+        
+    # Display Chat History
+    for message in current_history:
+       # Display user/model messages accordingly
+       user_message = message['User']
+       model_output=message['Model']
+    
+    # Display user message with avatar
+       st.markdown(
+        f"<div class='user-message'><img src='{human_avatar}' class='avatar'>{user_message}</div>",
+        unsafe_allow_html=True
+       )
+    
+    # Display model message with robot avatar
+       st.markdown(
+        f"<div class='model-message'><img src='{ai_avatar}' class='avatar'>{model_output}</div>",
+        unsafe_allow_html=True
+            )
+  
 if __name__ == "__main__":
     handle_input()
 
