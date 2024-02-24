@@ -1,24 +1,24 @@
-import langchain
-from langchain_google_genai import ChatGoogleGenerativeAI as genai
-from langchain_google_genai import GoogleGenerativeAIEmbeddings as ge
-import streamlit as st
-import dotenv
-import os
-from chat_store import save_conversation, load_conversation
-from langchain.chains.conversation.memory import (
+from chat_store import save_conversation,load_unique_prompts,load_conversations_by_prompt
+from imports import (
+    PromptTemplate,
+    LLMChain,
+    ConversationChain,
     ConversationBufferMemory,
     ConversationSummaryBufferMemory,
     ConversationKGMemory,
-    ConversationSummaryMemory
+    ConversationSummaryMemory,
+    load_dotenv,
+    os,
+    genai,
+    dotenv,
+    st,
+    langchain,
 )
-from langchain.prompts import PromptTemplate
-from langchain.chains import LLMChain,ConversationChain
-from dotenv import load_dotenv
+
 load_dotenv()
 os.environ['GOOGLE_API_KEY']=os.getenv('GOOGLE_API_KEY')
 
 llm=genai(model='gemini-pro')
-embeddings=ge(model='models/embeddings-001')
 def load_css(css_file):
     with open(css_file) as f:
         st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
@@ -30,11 +30,16 @@ def extract_unique_prompts(conversation_history):
     return list(set(all_prompts))  # Using a set removes duplicates
 
 def update_and_get_unique_prompts(new_prompt=None):
-    conversation_history = load_conversation()
-    if new_prompt and new_prompt not in conversation_history:
-        # Here you might want to append the new prompt to your conversation history or a separate prompt storage
-        save_conversation({'Prompt': new_prompt, 'User': '', 'Model': ''})  # Adjust based on your save_conversation function
-    unique_prompts = extract_unique_prompts(conversation_history)
+    # Load all unique prompts to check if the new_prompt already exists
+    unique_prompts = load_unique_prompts()
+    print(unique_prompts)
+    
+    if new_prompt and new_prompt not in unique_prompts:
+        # Save the new prompt to your conversation history or a separate prompt storage
+        save_conversation({'Prompt': new_prompt, 'User': '', 'Model': ''})
+        # Reload the unique prompts as the list has changed
+        unique_prompts = load_unique_prompts()
+    
     return unique_prompts
 
 
@@ -89,7 +94,7 @@ selected_prompt = st.sidebar.selectbox("Choose a Prompt", options=all_prompts, k
 
 current_history=[]
 def handle_input():
-
+    
     global template_chain
     global current_history
     # applied_prompt = ""
@@ -106,19 +111,17 @@ def handle_input():
         )
         output = model_chain.invoke({'input': user_input})
         # Save the information to database
-        save_conversation({'Prompt': current_prompt, 'User': user_input, 'Model': output.get('text', '')})
+        save_conversation({'Prompt': current_prompt, 'User': user_input, 'Model': output.get('text','')})
         # Reload conversation history to display the latest interaction
-        current_history = load_conversation()
-
-        
-        # Load existing history and display
-        current_history = load_conversation()
-        
+        current_history = load_conversations_by_prompt(current_prompt)
+        # print(current_history)
+ 
     # Display Chat History
     for message in current_history:
        # Display user/model messages accordingly
        user_message = message['User']
        model_output=message['Model']
+       
     
     # Display user message with avatar
        st.markdown(
